@@ -83,7 +83,7 @@ func getMarkdown(repoURL string) ([]string, error){
 }
 
 func parseMarkdown(file []byte, repo *Repo) bool{
-	
+	// search markdown file for links and check if they are working i.e. no http errors and not makeschool
 
 	return false
 }
