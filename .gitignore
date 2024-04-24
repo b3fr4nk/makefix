@@ -28,3 +28,4 @@ go.work
 
 # vscode workspace folder
 .vscode
+.env
