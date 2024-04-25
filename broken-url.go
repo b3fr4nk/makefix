@@ -17,10 +17,10 @@ import (
 )
 
 type Repo struct {
-	repoName string
-	repoURL string
-	errors []string
-	errorType []string
+	RepoName string
+	RepoURL string
+	Errors []string
+	ErrorType []string
 	
 }
 
@@ -105,8 +105,8 @@ func parseMarkdown(file string, repo *Repo){
 
 	if len(matches) > 0 {
 		for _, match := range(matches) {
-			repo.errors = append(repo.errors, match)
-			repo.errorType = append(repo.errorType, "MAKESCHOOL")
+			repo.Errors = append(repo.Errors, match)
+			repo.ErrorType = append(repo.ErrorType, "MAKESCHOOL")
 		}
 	}
 
@@ -115,8 +115,8 @@ func parseMarkdown(file string, repo *Repo){
 		c := colly.NewCollector()
 
 		c.OnError(func(r *colly.Response, err error) {
-			repo.errors = append(repo.errors, link)
-			repo.errorType = append(repo.errorType, "URL")
+			repo.Errors = append(repo.Errors, link)
+			repo.ErrorType = append(repo.ErrorType, "URL")
 		})
 
 		c.Visit(link)
@@ -150,8 +150,8 @@ func findErrors() []Repo{
 
 	for _, repo := range(repos) {
 		tempRepo := Repo{}
-		tempRepo.repoName = *repo.FullName
-		tempRepo.repoURL = repo.GetHTMLURL()
+		tempRepo.RepoName = *repo.FullName
+		tempRepo.RepoURL = repo.GetHTMLURL()
 		mdContents, err := getMarkdown(repo.GetHTMLURL())
 		if err != nil {
 			println(err)
@@ -160,7 +160,7 @@ func findErrors() []Repo{
 
 		for _, content := range(mdContents) {
 			parseMarkdown(content, &tempRepo)
-			if len(tempRepo.errors) > 0{
+			if len(tempRepo.Errors) > 0{
 				urlErrors = append(urlErrors, tempRepo)
 			}
 		}
@@ -180,8 +180,6 @@ func main() {
   	}
 
 	errors := findErrors()
-
-	fmt.Println(findErrors())
 	
 	errorsJSON, err := json.MarshalIndent(errors, "", " ")
 	if err != nil {
