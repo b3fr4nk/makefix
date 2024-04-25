@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
+	"github.com/gocolly/colly"
 	"github.com/google/go-github/github"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -16,7 +19,7 @@ import (
 type Repo struct {
 	repoName string
 	repoURL string
-	urls []string
+	errors []string
 	errorType []string
 	
 }
@@ -71,24 +74,56 @@ func getMarkdown(repoURL string) ([]string, error){
 	//filter out non .md files
 	for _, content := range(contents) {
 		if content.GetType() == "file" && isMarkdownFile(content.GetName()){
-			output, err := content.GetContent()
-			if err != nil{
-				fmt.Print("Error retrieving markdown file contents: %v\n", err)
-				return markdownContents, err
+			// Download the content of the Markdown file
+			mdContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, content.GetPath(), nil)
+			if err != nil {
+				fmt.Printf("Error getting file content: %v\n", err)
+				continue
 			}
-			markdownContents = append(markdownContents, output)
+
+			// Decode content using GetContent() method
+			contentStr, err := mdContent.GetContent()
+			if err != nil {
+				fmt.Printf("Error decoding file content: %v\n", err)
+				continue
+			}
+
+			markdownContents = append(markdownContents, contentStr)
 		}
 	}
 	return markdownContents, nil
 }
 
-func parseMarkdown(file []byte, repo *Repo) bool{
-	// search markdown file for links and check if they are working i.e. no http errors and not makeschool
+func parseMarkdown(file string, repo *Repo){
+	// search markdown file for links and check if they are working i.e. no http errors and not affiliated with makeschool
 
-	return false
+	// Define a regular expression to match links
+	linkRegex := regexp.MustCompile(`\b(?:https?|ftp):\/\/[-A-Za-z0-9+&@#\/%?=~_|!:,.;]*[-A-Za-z0-9+&@#\/%=~_|]`)
+	makeschoolRegex := regexp.MustCompile(`(?i)makeschool`)
+
+	matches := makeschoolRegex.FindAllString(file, -1)
+
+	if len(matches) > 0 {
+		for _, match := range(matches) {
+			repo.errors = append(repo.errors, match)
+			repo.errorType = append(repo.errorType, "MAKESCHOOL")
+		}
+	}
+
+	links := linkRegex.FindAllString(file, -1)
+	for _, link := range(links) {
+		c := colly.NewCollector()
+
+		c.OnError(func(r *colly.Response, err error) {
+			repo.errors = append(repo.errors, link)
+			repo.errorType = append(repo.errorType, "URL")
+		})
+
+		c.Visit(link)
+	}
 }
 
-func findErrors() {
+func findErrors() []Repo{
 	urlErrors := []Repo{}
 
 	token := os.Getenv("GITHUB_TOKEN")
@@ -124,22 +159,36 @@ func findErrors() {
 		}
 
 		for _, content := range(mdContents) {
-			isError := parseMarkdown([]byte(content), &tempRepo)
-			if isError {
+			parseMarkdown(content, &tempRepo)
+			if len(tempRepo.errors) > 0{
 				urlErrors = append(urlErrors, tempRepo)
 			}
 		}
 
 	}
 
+	return urlErrors
 }
 
 func main() {
+
+
 	err := godotenv.Load()
   	if err != nil {
 		fmt.Print("error")
     	log.Fatal("Error loading .env file")
   	}
 
-	findErrors()
+	errors := findErrors()
+
+	fmt.Println(findErrors())
+	
+	errorsJSON, err := json.MarshalIndent(errors, "", " ")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	os.WriteFile("results/repoErrors.json", errorsJSON, 0666)
+
+
 }
