@@ -18,3 +18,7 @@ Using the Github developer API to gather all markdown files in a repo the progra
 1. Navigate to wherever you downloaded the source code
 2. enter `go run broken-url.go` into your terminal
 3. open the generated JSON and update the repositories
+
+## What was used
+
+Using the gogithub library, godotenv library, and the oauth2 library
