@@ -21,4 +21,4 @@ Using the Github developer API to gather all markdown files in a repo the progra
 
 ## What was used
 
-Using the go-github library, godotenv library, and the oauth2 library
+Using the go-github library, colly, godotenv library, and the oauth2 library
