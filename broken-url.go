@@ -19,17 +19,24 @@ import (
 type Repo struct {
 	RepoName string
 	RepoURL string
-	Errors []string
-	ErrorType []string
+	Errors []MakeError
 	
+}
+
+type MakeError struct {
+	Error string
+	ErrorType string
+	ErrorLocation string
+
 }
 
 func isMarkdownFile(filename string) bool{
 	return len(filename) > 3 && filename[len(filename)-3:] == ".md"
 }
 
-func getMarkdown(repoURL string) ([]string, error){
+func getMarkdown(repoURL string) ([]string, []string, error){
 	var markdownContents []string
+	var filePaths []string
 
 	token := os.Getenv("GITHUB_TOKEN")
 	ctx := context.Background()
@@ -46,14 +53,14 @@ func getMarkdown(repoURL string) ([]string, error){
 	parsedURL, err := url.Parse(repoURL)
 	if err != nil {
 		fmt.Printf("Error parsing URL: %v\n", err)
-		return markdownContents, err
+		return markdownContents, filePaths, err
 	}
 
 	// Extract owner and repository name from the path
 	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
 	if len(pathParts) != 2 {
 		fmt.Println("Invalid GitHub repository URL")
-		return markdownContents, err
+		return markdownContents, filePaths, err
 	}
 
 	// GitHub repository information
@@ -68,7 +75,7 @@ func getMarkdown(repoURL string) ([]string, error){
 	_, contents, _,  err := client.Repositories.GetContents(ctx, owner, repo, "/", opt)
 	if err != nil{
 		fmt.Printf("Error getting repository contents: %v\n", err)
-		return markdownContents, err
+		return markdownContents, filePaths, err
 	}
 
 	//filter out non .md files
@@ -89,12 +96,13 @@ func getMarkdown(repoURL string) ([]string, error){
 			}
 
 			markdownContents = append(markdownContents, contentStr)
+			filePaths = append(filePaths, content.GetPath())
 		}
 	}
-	return markdownContents, nil
+	return markdownContents, filePaths, nil
 }
 
-func parseMarkdown(file string, repo *Repo){
+func parseMarkdown(file string, repo *Repo, filepath string){
 	// search markdown file for links and check if they are working i.e. no http errors and not affiliated with makeschool
 
 	// Define a regular expression to match links
@@ -105,8 +113,8 @@ func parseMarkdown(file string, repo *Repo){
 
 	if len(matches) > 0 {
 		for _, match := range(matches) {
-			repo.Errors = append(repo.Errors, match)
-			repo.ErrorType = append(repo.ErrorType, "MAKESCHOOL")
+			newError := MakeError{Error: match, ErrorType: "MAKESCHOOL", ErrorLocation: filepath}
+			repo.Errors = append(repo.Errors, newError)
 		}
 	}
 
@@ -115,8 +123,8 @@ func parseMarkdown(file string, repo *Repo){
 		c := colly.NewCollector()
 
 		c.OnError(func(r *colly.Response, err error) {
-			repo.Errors = append(repo.Errors, link)
-			repo.ErrorType = append(repo.ErrorType, "URL")
+			newError := MakeError{Error: link, ErrorType: "URL", ErrorLocation: filepath}
+			repo.Errors = append(repo.Errors, newError)
 		})
 
 		c.Visit(link)
@@ -152,14 +160,14 @@ func findErrors() []Repo{
 		tempRepo := Repo{}
 		tempRepo.RepoName = *repo.FullName
 		tempRepo.RepoURL = repo.GetHTMLURL()
-		mdContents, err := getMarkdown(repo.GetHTMLURL())
+		mdContents, filepaths, err := getMarkdown(repo.GetHTMLURL())
 		if err != nil {
 			println(err)
 			os.Exit(1)
 		}
 
-		for _, content := range(mdContents) {
-			parseMarkdown(content, &tempRepo)
+		for i, content := range(mdContents) {
+			parseMarkdown(content, &tempRepo, filepaths[i])
 			if len(tempRepo.Errors) > 0{
 				urlErrors = append(urlErrors, tempRepo)
 			}
